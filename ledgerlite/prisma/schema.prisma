@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "../app/generated/prisma"
@@ -9,32 +8,101 @@ datasource db {
 }
 
 model Item {
-  id String @id @default(cuid())
-  name String @unique
-  lowStock Int @default(5)
-  currentStock Int @default(0)
-  createAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String   @unique
+  lowStock     Int      @default(5)
+  currentStock Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  sales Sales[]
+  sales Sale[]
 
+  @@index([createdAt])
 }
 
-model Sales{
-  id String @id @default(cuid())
-  unitPrice Decimal @db.Decimal(10,2)
-  quantity Int @default(1)
-  totalAmount Decimal @db.Decimal(10,2)
+model Sale {
+  id             String   @id @default(cuid())
+  unitPrice      Decimal  @db.Decimal(10, 2)
+  quantity       Int      @default(1)
+  totalAmount    Decimal  @db.Decimal(10, 2)
   customItemName String?
-  itemId String?
-  createdAt DateTime @default(now())
-  item Item? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  itemId         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  item           Item?    @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
 }
 
-model Expenses {
-  id String @id @default(cuid())
-  amount Decimal @db.Decimal(10,2)
-  description String? @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Expense {
+  id          String   @id @default(cuid())
+  amount      Decimal  @db.Decimal(10, 2)
+  description String?  @db.Text
+  category    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User?    @relation(fields: [userId], references: [id])
+  userId      String?
+
+  @@index([createdAt])
+}
+
+model User {
+  id                String    @id @default(cuid())
+  name              String
+  buisnessName      String
+  email             String    @unique
+  passwordHash      String
+  isVerified        Boolean   @default(false)
+  image             String?
+  verificationToken String?
+  expiresAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  phoneNumber                   String?   @unique
+  phoneNumberIsVerified         Boolean   @default(false)
+  phoneNumberVerificationToken  String?
+  phoneNumberVerifiesExpiresAt  DateTime?
+  phoneNumberVerificatonAttemps Int       @default(0)
+  lastPhoneSmsSent              DateTime?
+  dailySmsCount                 Int       @default(0)
+  dailyPhoneSmsSent             DateTime?
+  dailyPhoneSmsReset DateTime?
+
+  session        Session[]
+  expense        Expense[]
+  sale           Sale[]
+  item           Item[]
+  syncOperations SyncOperation[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
+enum Resource {
+  SALE
+  ITEM
+  EXPENSE
+}
+
+//think of this like an outbox blueprint. it stores the things that needs to be sent to the server
+model SyncOperation {
+  id         String   @id
+  operation  String
+  resource   Resource
+  resourceId String
+  createdAt  DateTime @default(now())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

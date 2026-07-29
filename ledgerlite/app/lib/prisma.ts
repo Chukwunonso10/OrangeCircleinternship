@@ -21,7 +21,9 @@ const isLocal = connectionString.includes("localhost") || connectionString.inclu
 poolConfig.ssl = isLocal ? false : { rejectUnauthorized: false };
 
 if (process.env.NODE_ENV === "production") {
-  const pool = new Pool(poolConfig);
+  const pool = new Pool({...poolConfig, max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,});
   const adapter = new PrismaPg(pool);
   prismaInstance = new PrismaClient({
     adapter,
