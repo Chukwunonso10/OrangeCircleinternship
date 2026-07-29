@@ -1,9 +1,16 @@
+import { getCurrentUser } from "@/app/lib/authhelper";
 import { Verifypassword } from "@/app/lib/hashpassword";
 import prisma from "@/app/lib/prisma";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
+    const user = await getCurrentUser()
+    if (user) {
+        redirect("/dashboard")
+    }
+
     try {
         const { email, password } = await req.json()
 
@@ -32,7 +39,7 @@ export async function POST(req: NextRequest) {
         if (!user) {
             return NextResponse.json({
                 success: false, message: "Account Not Found"
-            },{status: 404})
+            }, { status: 404 })
         }
 
         const isPassword = await Verifypassword(password, user.passwordHash)
@@ -66,7 +73,7 @@ export async function POST(req: NextRequest) {
             secure: isProduction,
             sameSite: "lax",
             path: "/",
-            maxAge: 60*60*24
+            maxAge: 60 * 60 * 24
         })
 
         return NextResponse.json({
@@ -75,7 +82,7 @@ export async function POST(req: NextRequest) {
                 email: user.email,
                 buisnessName: user.buisnessName,
                 name: user.name
-                
+
             }
         }, { status: 200 })
 

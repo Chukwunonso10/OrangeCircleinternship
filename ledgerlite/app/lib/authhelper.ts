@@ -14,7 +14,7 @@ export async function getCurrentUserId(){
     })
 
     if (!session) {
-      cookiesStore.delete("sessionToken")
+      //cookiesStore.delete("sessionToken")
       return null
     }
 
@@ -43,7 +43,7 @@ export async function getCurrentUser(){
   const session = await prisma.session.findUnique({where: {sessionToken}, include: {user: true}})
 
   if(!session) {
-    cookiesStore.delete("sessionToken")
+    //cookiesStore.delete("sessionToken")
     return null
   }
 
