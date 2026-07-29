@@ -5,11 +5,11 @@ export async function proxy(req: NextRequest){
     const isAuthRoute = pathname === "/signin" || pathname === "/signup";
     const sessionToken = req.cookies.get("sessionToken")?.value
 
-    // if (isAuthRoute && sessionToken) {
-    //     const url = req.nextUrl.clone()
-    //     url.pathname = "/dashboard"
-    //     return NextResponse.redirect(url)
-    // }
+    if (isAuthRoute && sessionToken) {
+        const url = req.nextUrl.clone()
+        url.pathname = "/dashboard"
+        return NextResponse.redirect(url)
+    }
 
     const protectedRoute = pathname.startsWith("/api/protected")
     const dashboardRoute = pathname.startsWith("/dashboard")
