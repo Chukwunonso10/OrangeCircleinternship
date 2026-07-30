@@ -21,6 +21,17 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
           {children}
           <Toaster position="bottom-right" />
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                if ('serviceWorker' in navigator) {
+                  window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js');
+                  });
+                }
+              `
+            }}
+          />
       </body>
     </html>
   );
