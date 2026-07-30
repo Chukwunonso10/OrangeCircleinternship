@@ -245,7 +245,7 @@ function WelcomeScreen({
         <PrimaryButton onClick={onCreate}>Create Account</PrimaryButton>
         <div>
           <Link
-            href="/newsignin"
+            href="/signin"
             className="block text-center rounded-full border border-slate-200 px-4 py-3.5 font-semibold text-sm text-teal-700 hover:opacity-80"
           >
             Log In
