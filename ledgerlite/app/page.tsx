@@ -23,7 +23,15 @@ const FAQAccordion = dynamic(() => import("@/components/faqAccordion"), {
 });
 
 export default async function Home() {
-  const user = await getCurrentUser()
+  let user = null;
+  try {
+    user = await getCurrentUser();
+  } catch (error: any) {
+    if (error.digest?.startsWith("NEXT_REDIRECT") || error.digest === "DYNAMIC_SERVER_USAGE" || error.message?.includes("Dynamic server usage")) {
+      throw error;
+    }
+    console.error("Database connection error in Home page:", error);
+  }
   if(user){
     redirect("/dashboard")
   }

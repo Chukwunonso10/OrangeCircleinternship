@@ -37,17 +37,25 @@ export const getCurrentUserId = cache(async () => {
 });
 
 export const getCurrentUser = cache(async () => {
-  const cookiesStore = await cookies()
-  const sessionToken = cookiesStore.get("sessionToken")?.value
-  if(!sessionToken) return null
+  try {
+    const cookiesStore = await cookies()
+    const sessionToken = cookiesStore.get("sessionToken")?.value
+    if(!sessionToken) return null
 
-  const session = await prisma.session.findUnique({where: {sessionToken}, include: {user: true}})
+    const session = await prisma.session.findUnique({where: {sessionToken}, include: {user: true}})
 
-  if(!session) {
-    //cookiesStore.delete("sessionToken")
-    return null
+    if(!session) {
+      //cookiesStore.delete("sessionToken")
+      return null
+    }
+
+    const user = session.user
+    return user;
+  } catch (error: any) {
+    if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error.message).includes('Dynamic server usage'))) {
+      throw error;
+    }
+    console.error("authentication error in getCurrentUser: unable to validate session", error);
+    return null;
   }
-
-  const user = session.user
-  return user;
 });
