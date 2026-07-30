@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import prisma from "./prisma";
 import { NextResponse } from "next/server";
+import { cache } from "react";
 
-export async function getCurrentUserId(){
+export const getCurrentUserId = cache(async () => {
   try {
     const cookiesStore = await cookies()
     const sessionToken = cookiesStore.get("sessionToken")?.value
@@ -31,11 +32,11 @@ export async function getCurrentUserId(){
       throw error;
     }
     console.error("authentication error: unable to validate session", error)
-    return null
+    return null;
   }
-}
+});
 
-export async function getCurrentUser(){
+export const getCurrentUser = cache(async () => {
   const cookiesStore = await cookies()
   const sessionToken = cookiesStore.get("sessionToken")?.value
   if(!sessionToken) return null
@@ -49,4 +50,4 @@ export async function getCurrentUser(){
 
   const user = session.user
   return user;
-}
+});

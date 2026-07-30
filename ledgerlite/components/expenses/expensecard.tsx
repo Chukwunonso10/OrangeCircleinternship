@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Eye, X, Loader2, Pencil } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -14,57 +14,66 @@ interface ExpenseItem {
 }
 
 interface ExpenseCardProps {
-  expense?: ExpenseItem[];
+  expenses?: ExpenseItem[];
+  onDeleteOptimistic: (id: string) => void;
+  onEditOptimistic: (id: string, data: any) => void;
 }
 
-export default function ExpenseCard({ expense = [] }: ExpenseCardProps) {
+export default function ExpenseCard({
+  expenses = [],
+  onDeleteOptimistic,
+  onEditOptimistic,
+}: ExpenseCardProps) {
   const router = useRouter();
 
   // Details Modal State
   const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(null);
-  const [open, setOpen ] = useState(false)
+  const [open, setOpen] = useState(false);
 
   // Deleting Loading State
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [description, setDescription]= useState("")
-  const [category, setCategory]= useState("")
-  const [amount, setAmount]= useState("")
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [amount, setAmount] = useState("");
 
   // Updating states
   const [updating, setUpdating] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  const displayExpense = expense;
+  // Custom Delete Confirm State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
-  // Handle Delete Action
-  async function handleDelete(id: string) {
-    if (!confirm("Are you sure you want to delete this expense?")) {
-      return;
-    }
+  // Perform Actual Delete
+  async function performDelete(id: string) {
+    setShowDeleteConfirm(null);
+    startTransition(async () => {
+      onDeleteOptimistic(id);
+      setDeletingId(id);
+      try {
+        const response = await fetch(`/api/routes/expenses/${id}`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
 
-    setDeletingId(id);
-    try {
-      const response = await fetch(`/api/routes/expenses/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+        const result = await response.json();
 
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        toast.success("Expense deleted successfully!");
+        if (response.ok && result.success) {
+          toast.success("Expense deleted successfully!");
+          router.refresh();
+        } else {
+          toast.error(result.message || "Failed to delete expense.");
+          router.refresh();
+        }
+      } catch (error) {
+        console.error("Delete expense error:", error);
+        toast.error("Network error: Could not delete expense.");
         router.refresh();
-      } else {
-        toast.error(result.message || "Failed to delete expense.");
+      } finally {
+        setDeletingId(null);
       }
-    } catch (error) {
-      console.error("Delete expense error:", error);
-      toast.error("Network error: Could not delete expense.");
-    } finally {
-      setDeletingId(null);
-    }
+    });
   }
 
   function handleEdit(item: ExpenseItem) {
@@ -82,35 +91,43 @@ export default function ExpenseCard({ expense = [] }: ExpenseCardProps) {
     setUpdating(true);
     setEditError(null);
 
-    try {
-      const res = await fetch(`/api/routes/expenses/${selectedExpense.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          description,
-          category,
-          amount: Number(amount),
-        }),
-      });
+    const amountVal = Number(amount);
+    const updatedData = {
+      description,
+      category,
+      amount: amountVal,
+    };
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Failed to update expense");
-      }
-
-      toast.success("Expense updated successfully!");
+    startTransition(async () => {
+      onEditOptimistic(selectedExpense.id, updatedData);
       setOpen(false);
       setSelectedExpense(null);
-      router.refresh();
-    } catch (err: any) {
-      console.error("Update expense error:", err);
-      setEditError(err.message || "Something went wrong.");
-      toast.error(err.message || "Something went wrong.");
-    } finally {
-      setUpdating(false);
-    }
+
+      try {
+        const res = await fetch(`/api/routes/expenses/${selectedExpense.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(updatedData),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Failed to update expense");
+        }
+
+        toast.success("Expense updated successfully!");
+        router.refresh();
+      } catch (err: any) {
+        console.error("Update expense error:", err);
+        setEditError(err.message || "Something went wrong.");
+        toast.error(err.message || "Something went wrong.");
+        router.refresh();
+      } finally {
+        setUpdating(false);
+      }
+    });
   }
 
   function closeEditModal() {
@@ -118,8 +135,9 @@ export default function ExpenseCard({ expense = [] }: ExpenseCardProps) {
     setSelectedExpense(null);
     setEditError(null);
   }
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -142,7 +160,7 @@ export default function ExpenseCard({ expense = [] }: ExpenseCardProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {displayExpense.map((item) => {
+            {expenses.map((item) => {
               const descriptionText = item.description || "No Description";
               const amountValue = Number(item.amount || 0);
 
@@ -191,14 +209,14 @@ export default function ExpenseCard({ expense = [] }: ExpenseCardProps) {
                         type="button"
                         onClick={() => handleEdit(item)}
                         disabled={isDeleting}
-                        className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-blue-500 disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-blue-500 disabled:opacity-50 cursor-pointer"
                         title="Edit"
                       >
-                        <Pencil className="h-4 w-4"/>
+                        <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDelete(item.id)}
+                        onClick={() => setShowDeleteConfirm(item.id)}
                         disabled={isDeleting}
                         className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50 cursor-pointer"
                         title="Delete"
@@ -218,7 +236,7 @@ export default function ExpenseCard({ expense = [] }: ExpenseCardProps) {
         </table>
       </div>
 
-      {displayExpense.length === 0 && (
+      {expenses.length === 0 && (
         <div className="flex items-center justify-center px-6 py-12">
           <p className="text-sm text-slate-500">No expense records found.</p>
         </div>
@@ -229,7 +247,7 @@ export default function ExpenseCard({ expense = [] }: ExpenseCardProps) {
         <p className="text-xs text-slate-600">
           Total records:{" "}
           <span className="font-semibold text-slate-900">
-            {displayExpense.length}
+            {expenses.length}
           </span>
         </p>
       </div>
@@ -429,6 +447,57 @@ export default function ExpenseCard({ expense = [] }: ExpenseCardProps) {
           </div>
         </div>
       )}
+
+      {/* Custom Delete Confirmation Modal Form */}
+      {showDeleteConfirm && (() => {
+        const targetExpense = expenses.find((e) => e.id === showDeleteConfirm);
+        const name = targetExpense?.description || targetExpense?.category || "this expense";
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 animate-in fade-in duration-150">
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-all duration-300"
+              aria-hidden="true"
+              onClick={() => setShowDeleteConfirm(null)}
+            />
+
+            <div
+              className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl bg-white text-slate-900 shadow-2xl ring-1 ring-black/10 p-6 dark:bg-slate-900 dark:text-white"
+              style={{
+                animation: "modal-slide-in 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
+              }}
+            >
+              <h3 className="text-lg font-bold text-slate-950 dark:text-white">Confirm Deletion</h3>
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                Are you sure you want to delete the expense for <strong className="text-slate-950 dark:text-white">{name}</strong>?
+                This action cannot be undone.
+              </p>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  performDelete(showDeleteConfirm);
+                }}
+                className="mt-6 flex justify-end gap-3"
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 px-5 py-3 text-sm font-semibold transition active:scale-95 cursor-pointer dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-red-600 text-white hover:bg-red-700 px-5 py-3 text-sm font-semibold transition active:scale-95 cursor-pointer shadow-md shadow-red-200 dark:shadow-none"
+                >
+                  Delete
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

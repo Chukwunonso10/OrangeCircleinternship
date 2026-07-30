@@ -1,10 +1,15 @@
 "use client";
-import { useState } from "react";
+
+import { useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, Plus, Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-export default function InventoryForm() {
+interface InventoryFormProps {
+  onAddOptimistic: (newItem: any) => void;
+}
+
+export default function InventoryForm({ onAddOptimistic }: InventoryFormProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [product, setProduct] = useState("");
@@ -15,9 +20,6 @@ export default function InventoryForm() {
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-
-
 
   function resetForm() {
     setProduct("");
@@ -30,7 +32,6 @@ export default function InventoryForm() {
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitting(true);
     setErrorMsg(null);
 
     const name = product.trim();
@@ -39,51 +40,76 @@ export default function InventoryForm() {
 
     if (!name) {
       setErrorMsg("Product name is required.");
-      setSubmitting(false);
       return;
     }
 
     if (isNaN(currentStock) || currentStock < 0) {
       setErrorMsg("Quantity in Stock must be a non-negative number.");
-      setSubmitting(false);
       return;
     }
 
     if (isNaN(lowStock) || lowStock < 0) {
       setErrorMsg("Low stock threshold must be a non-negative number.");
-      setSubmitting(false);
       return;
     }
 
-    try {
-      const res = await fetch("/api/routes/item", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          currentStock,
-          lowStock,
-        }),
-      });
+    setSubmitting(true);
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Failed to create product");
-      }
+    const tempId = `temp-${Date.now()}`;
+    const newOptimisticItem = {
+      id: tempId,
+      name,
+      currentStock,
+      lowStock,
+      createdAt: new Date().toISOString(),
+    };
 
-      toast.success("Product created successfully!");
+    // Cache field values for error rollback
+    const cachedProduct = product;
+    const cachedStock = stock;
+    const cachedCost = costPrice;
+    const cachedSelling = sellingPrice;
+    const cachedThreshold = threshhold;
+
+    startTransition(async () => {
+      onAddOptimistic(newOptimisticItem);
       setOpen(false);
       resetForm();
-      router.refresh();
-    } catch (err: any) {
-      console.error("Create product error:", err);
-      setErrorMsg(err.message || "Something went wrong.");
-      toast.error(err.message || "Something went wrong.");
-    } finally {
-      setSubmitting(false);
-    }
+
+      try {
+        const res = await fetch("/api/routes/item", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            currentStock,
+            lowStock,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Failed to create product");
+        }
+
+        toast.success("Product created successfully!");
+        router.refresh();
+      } catch (err: any) {
+        console.error("Create product error:", err);
+        setOpen(true);
+        setProduct(cachedProduct);
+        setStock(cachedStock);
+        setCostPrice(cachedCost);
+        setSellingPrice(cachedSelling);
+        setThreshold(cachedThreshold);
+        setErrorMsg(err.message || "Something went wrong.");
+        toast.error(err.message || "Something went wrong.");
+      } finally {
+        setSubmitting(false);
+      }
+    });
   }
 
   return (
@@ -92,7 +118,7 @@ export default function InventoryForm() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex items-center justify-center rounded-full bg-brand-primary px-2 md:px-5 py-3  text-sm font-semibold text-white shadow-sm transition hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-primary/50 cursor-pointer"
+          className="inline-flex items-center justify-center rounded-full bg-brand-primary px-2 md:px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-primary/50 cursor-pointer"
         >
           <Plus size={18} />
           <span className="px-1 ">Add</span>
@@ -101,11 +127,11 @@ export default function InventoryForm() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 animate-in fade-in duration-150">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             aria-hidden="true"
-            onClick={() => setOpen(false)}
+            onClick={() => !submitting && setOpen(false)}
           />
 
           <div
@@ -117,19 +143,21 @@ export default function InventoryForm() {
                 <div>
                   <h2 className="text-xl font-semibold">Add Product</h2>
                   <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                    Fill item, quantity, and amount to save an invetory.
+                    Fill item, quantity, and amount to save an inventory.
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
-                  className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+                  onClick={() => !submitting && setOpen(false)}
+                  disabled={submitting}
+                  className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 cursor-pointer disabled:opacity-50"
                   aria-label="Close"
                 >
                   <X size={18} />
                 </button>
               </div>
-              {/* inventry form */}
+
+              {/* inventory form */}
               <form onSubmit={handleSave} className="space-y-5 px-6 py-6">
                 {errorMsg && (
                   <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded-lg text-sm animate-in fade-in slide-in-from-top-1 duration-200">
@@ -142,13 +170,13 @@ export default function InventoryForm() {
                     htmlFor="product"
                     className="block text-sm font-medium text-slate-700 dark:text-slate-300"
                   >
-                    Products
+                    Product Name
                   </label>
                   <input
                     id="product"
                     value={product}
                     onChange={(e) => setProduct(e.target.value)}
-                    placeholder="Eg rice,tomatoe paste"
+                    placeholder="Eg rice, tomato paste"
                     className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     disabled={submitting}
                     required
@@ -206,7 +234,7 @@ export default function InventoryForm() {
                       placeholder="0"
                       value={sellingPrice}
                       onChange={(e) => setSellingPrice(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-brand-primary[#0b7a75] focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-slate-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-slate-100"
                       disabled={submitting}
                       required
                     />
@@ -226,12 +254,12 @@ export default function InventoryForm() {
                     placeholder="0"
                     value={threshhold}
                     onChange={(e) => setThreshold(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-brand-primary[#0b7a75] focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-slate-100"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-slate-100"
                     disabled={submitting}
                     required
                   />
                   <p className="text-xs text-gray-700">
-                    we will alert you when stock falls below this level{" "}
+                    we will alert you when stock falls below this level
                   </p>
                 </div>
 

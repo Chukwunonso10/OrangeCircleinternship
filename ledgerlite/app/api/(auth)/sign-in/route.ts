@@ -6,10 +6,6 @@ import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-    const user = await getCurrentUser()
-    if (user) {
-        redirect("/dashboard")
-    }
 
     try {
         const { email, password } = await req.json()

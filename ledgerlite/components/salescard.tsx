@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useActionState } from "react";
+import { useState, useEffect, useActionState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Eye, X, Loader2, Pencil } from "lucide-react";
 import Pagination from "./pagination";
@@ -24,7 +24,9 @@ interface SalesCardProps {
   currentPage?: number;
   totalPages?: number;
   totalSales?: number;
-  pageSize: number
+  pageSize: number;
+  onDeleteOptimistic: (id: string) => void;
+  onEditOptimistic: (id: string, data: any) => void;
 }
 
 export default function SalesCard({
@@ -33,6 +35,8 @@ export default function SalesCard({
   totalPages = 1,
   totalSales = 0,
   pageSize,
+  onDeleteOptimistic,
+  onEditOptimistic,
 }: SalesCardProps) {
   const router = useRouter();
   
@@ -45,38 +49,43 @@ export default function SalesCard({
   // Editing Modal State
   const [editingSale, setEditingSale] = useState<any | null>(null);
 
+  // Custom Delete Confirm State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+
   const displaySales = sales;
 
-  // Handle Delete Action
-  async function handleDelete(id: string) {
-    if (!confirm("Are you sure you want to delete this sale? This will restore inventory stock counts for tracked items.")) {
-      return;
-    }
+  // Perform Actual Delete
+  async function performDelete(id: string) {
+    setShowDeleteConfirm(null);
+    startTransition(async () => {
+      onDeleteOptimistic(id);
+      setDeletingId(id);
+      try {
+        const response = await fetch(`/api/routes/sales/${id}`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        });
 
-    setDeletingId(id);
-    try {
-      const response = await fetch(`/api/routes/sales/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
-      });
+        const result = await response.json();
 
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        toast.success("Sale deleted successfully!");
+        if (response.ok && result.success) {
+          toast.success("Sale deleted successfully!");
+          router.refresh();
+        } else {
+          toast.error(result.message || "Failed to delete sale.");
+          router.refresh();
+        }
+      } catch (error) {
+        console.error("Delete error:", error);
+        toast.error("Network error: Could not delete sale.");
         router.refresh();
-      } else {
-        toast.error(result.message || "Failed to delete sale.");
+      } finally {
+        setDeletingId(null);
       }
-    } catch (error) {
-      console.error("Delete error:", error);
-      toast.error("Network error: Could not delete sale.");
-    } finally {
-      setDeletingId(null);
-    }
+    });
   }
 
   return (
@@ -161,7 +170,7 @@ export default function SalesCard({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDelete(item.id)}
+                        onClick={() => setShowDeleteConfirm(item.id)}
                         disabled={isDeleting}
                         className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50 cursor-pointer"
                         title="Delete"
@@ -282,21 +291,79 @@ export default function SalesCard({
       {editingSale && (
         <EditSaleModal
           sale={editingSale}
+          onEditOptimistic={onEditOptimistic}
           onClose={() => {
             setEditingSale(null);
             router.refresh();
           }}
         />
       )}
+
+      {/* Custom Delete Confirmation Modal Form */}
+      {showDeleteConfirm && (() => {
+        const targetSale = sales.find((s) => s.id === showDeleteConfirm);
+        const name =
+          targetSale?.itemName ||
+          targetSale?.item?.name ||
+          targetSale?.customItemName ||
+          "this sale";
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 animate-in fade-in duration-150">
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-all duration-300"
+              aria-hidden="true"
+              onClick={() => setShowDeleteConfirm(null)}
+            />
+
+            <div
+              className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl bg-white text-slate-900 shadow-2xl ring-1 ring-black/10 p-6 dark:bg-slate-900 dark:text-white"
+              style={{
+                animation: "modal-slide-in 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
+              }}
+            >
+              <h3 className="text-lg font-bold text-slate-950 dark:text-white">Confirm Deletion</h3>
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                Are you sure you want to delete the sale for <strong className="text-slate-950 dark:text-white">{name}</strong>?
+                This action cannot be undone and will restore inventory stock counts for tracked items.
+              </p>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  performDelete(showDeleteConfirm);
+                }}
+                className="mt-6 flex justify-end gap-3"
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 px-5 py-3 text-sm font-semibold transition active:scale-95 cursor-pointer dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-red-600 text-white hover:bg-red-700 px-5 py-3 text-sm font-semibold transition active:scale-95 cursor-pointer shadow-md shadow-red-200 dark:shadow-none"
+                >
+                  Delete
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
 function EditSaleModal({
   sale,
+  onEditOptimistic,
   onClose,
 }: {
   sale: any;
+  onEditOptimistic: (id: string, data: any) => void;
   onClose: () => void;
 }) {
   const [itemType, setItemType] = useState<"tracked" | "custom">(
@@ -324,6 +391,33 @@ function EditSaleModal({
 
   // Hook Server Action
   const [state, formAction, isPending] = useActionState(editSaleWithId, null);
+
+  // Intercept submit to dispatch optimistic edit updates
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const qty = Number(formData.get("quantity"));
+    const price = Number(formData.get("unitPrice"));
+    const customName = formData.get("customItemName") as string;
+    const itemIdx = formData.get("itemId") as string;
+
+    let displayItemName = customName;
+    if (itemType === "tracked") {
+      const foundProduct = products.find((p) => p.id === itemIdx);
+      displayItemName = foundProduct ? foundProduct.name : "Tracked Item";
+    }
+
+    startTransition(async () => {
+      onEditOptimistic(sale.id, {
+        quantity: qty,
+        totalAmount: qty * price,
+        unitPrice: price,
+        customItemName: itemType === "custom" ? customName : null,
+        item: itemType === "tracked" ? { name: displayItemName } : null,
+      });
+      formAction(formData);
+    });
+  }
 
   // Auto-close modal when action returns successfully
   useEffect(() => {
@@ -372,7 +466,7 @@ function EditSaleModal({
           </button>
         </div>
 
-        <form action={formAction} className="space-y-5 px-6 py-6">
+        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
           {state?.error && (
             <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded-lg text-sm">
               {state.error}

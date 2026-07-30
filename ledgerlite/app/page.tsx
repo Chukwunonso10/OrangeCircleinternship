@@ -1,11 +1,8 @@
-"use client";
-
 import Image from "next/image";
 import HomeNav from "@/components/homeNav";
 import Footer from "@/components/footer";
-import data from "@/components/accordian";
 import Link from "next/link";
-import { useState } from "react";
+import dynamic from "next/dynamic";
 import {
   Sparkles,
   Check,
@@ -16,17 +13,20 @@ import {
   Zap,
   Smartphone,
   ShieldCheck,
-  Star,
-  ChevronDown,
-  ChevronUp
+  Star
 } from "lucide-react";
+import { getCurrentUser } from "./lib/authhelper";
+import { redirect } from "next/navigation";
 
-export default function Home() {
-  const [selected, setSelected] = useState<number | null>(null);
+const FAQAccordion = dynamic(() => import("@/components/faqAccordion"), {
+  loading: () => <div className="animate-pulse py-10 text-center text-slate-500">Loading FAQs...</div>
+});
 
-  const handleSingleSelection = (getCurrentId: number) => {
-    setSelected(getCurrentId === selected ? null : getCurrentId);
-  };
+export default async function Home() {
+  const user = await getCurrentUser()
+  if(user){
+    redirect("/dashboard")
+  }
 
   const features = [
     {
@@ -589,43 +589,7 @@ export default function Home() {
                   </p>
                 </div>
                 {/* accordian */}
-                <div>
-                  <div className="w-full py-10">
-                    {data && data.length > 0 ? (
-                      data.map((dataItem) => (
-                        <div
-                          key={dataItem.id}
-                          className="border border-gray-200 rounded-2xl"
-                        >
-                          <div key={dataItem.id} className="">
-                            <div
-                              onClick={() => handleSingleSelection(dataItem.id)}
-                              className="flex justify-between font-semibold items-center cursor-pointer   p-4 mb-2"
-                            >
-                              <h3 className="text-md  text-gray-700">
-                                {dataItem.question}
-                              </h3>
-                              <span className="text-2xl text-gray-700]">
-                                {selected ? (
-                                  <ChevronUp size={18} />
-                                ) : (
-                                  <ChevronDown size={18} />
-                                )}
-                              </span>
-                            </div>
-                            {selected === dataItem.id ? (
-                              <div className="text-gray-700 py-2 px-4">
-                                {dataItem.answer}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div>No Data Found</div>
-                    )}
-                  </div>
-                </div>
+                <FAQAccordion />
               </div>
             </div>
           </section>

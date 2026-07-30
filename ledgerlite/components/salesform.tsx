@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, Plus, Loader2 } from "lucide-react";
 
-export default function SalesForm() {
+interface SalesFormProps {
+  onAddOptimistic: (newSale: any) => void;
+}
+
+export default function SalesForm({ onAddOptimistic }: SalesFormProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  
+
   // Form input states
   const [itemType, setItemType] = useState<"tracked" | "custom">("tracked");
   const [selectedItemId, setSelectedItemId] = useState("");
@@ -20,12 +24,11 @@ export default function SalesForm() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  
 
   // Fetch user's inventory items to choose from
   useEffect(() => {
     if (!open) return;
-    
+
     setLoadingProducts(true);
     fetch("/api/routes/item")
       .then((res) => res.json())
@@ -62,7 +65,6 @@ export default function SalesForm() {
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitting(true);
     setErrorMsg(null);
 
     // Validate selections
@@ -71,44 +73,101 @@ export default function SalesForm() {
 
     if (itemType === "custom" && !name?.trim()) {
       setErrorMsg("Item name is required for custom sales.");
-      setSubmitting(false);
       return;
     }
     if (itemType === "tracked" && !itemId) {
       setErrorMsg("Please select an item from your inventory.");
-      setSubmitting(false);
       return;
     }
 
-    try {
-      const response = await fetch("/api/routes/sales", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          itemId,
-          customItemName: name,
-          quantity: Number(quantity),
-          unitPrice: Number(unitPrice),
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        setOpen(false);
-        resetForm();
-        router.refresh(); // Refresh Next.js Server Component data
-      } else {
-        setErrorMsg(result.message || "Failed to record sale.");
-      }
-    } catch (err: any) {
-      setErrorMsg("Network error: Could not complete the transaction.");
-      console.error(err);
-    } finally {
-      setSubmitting(false);
+    const quantityNum = Number(quantity);
+    const unitPriceNum = Number(unitPrice);
+    if (isNaN(quantityNum) || quantityNum <= 0) {
+      setErrorMsg("Quantity must be a positive number.");
+      return;
     }
+    if (isNaN(unitPriceNum) || unitPriceNum <= 0) {
+      setErrorMsg("Unit price must be a positive number.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    // Find display name for the optimistic UI state representation
+    let displayItemName = name;
+    if (itemType === "tracked") {
+      const foundProduct = products.find((p) => p.id === itemId);
+      displayItemName = foundProduct ? foundProduct.name : "Tracked Item";
+    }
+
+    const tempId = `temp-${Date.now()}`;
+    const newOptimisticSale = {
+      id: tempId,
+      itemId,
+      customItemName: itemType === "custom" ? name : null,
+      item: itemType === "tracked" ? { name: displayItemName } : null,
+      quantity: quantityNum,
+      unitPrice: unitPriceNum,
+      totalAmount: quantityNum * unitPriceNum,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Stash current fields in case we need to roll back on API error
+    const cachedQuantity = quantity;
+    const cachedUnitPrice = unitPrice;
+    const cachedItemType = itemType;
+    const cachedSelectedItemId = selectedItemId;
+    const cachedCustomItemName = customItemName;
+
+    startTransition(async () => {
+      // Optimistically insert item
+      onAddOptimistic(newOptimisticSale);
+      setOpen(false);
+      resetForm();
+
+      try {
+        const response = await fetch("/api/routes/sales", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            itemId,
+            customItemName: name,
+            quantity: quantityNum,
+            unitPrice: unitPriceNum,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          router.refresh();
+        } else {
+          // Rollback: Reopen modal and restore user inputs
+          setOpen(true);
+          setItemType(cachedItemType);
+          setSelectedItemId(cachedSelectedItemId);
+          setCustomItemName(cachedCustomItemName);
+          setQuantity(cachedQuantity);
+          setUnitPrice(cachedUnitPrice);
+          setErrorMsg(result.message || "Failed to record sale.");
+        }
+      } catch (err: any) {
+        // Rollback: Reopen modal and restore user inputs
+        setOpen(true);
+        setItemType(cachedItemType);
+        setSelectedItemId(cachedSelectedItemId);
+        setCustomItemName(cachedCustomItemName);
+        setQuantity(cachedQuantity);
+        setUnitPrice(cachedUnitPrice);
+        setErrorMsg("Network error: Could not complete the transaction.");
+        console.error(err);
+      } finally {
+        setSubmitting(false);
+      }
+    });
   }
 
   return (
@@ -214,7 +273,7 @@ export default function SalesForm() {
                   >
                     Item
                   </label>
-                  
+
                   {itemType === "tracked" && products.length > 0 ? (
                     <select
                       id="item"
@@ -259,9 +318,8 @@ export default function SalesForm() {
                       id="quantity"
                       type="number"
                       placeholder="0"
-                      // min={1}
                       value={quantity}
-                      onChange={(e) => setQuantity((e.target.value))}
+                      onChange={(e) => setQuantity(e.target.value)}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition duration-200 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:shadow-md dark:border-zinc-700 dark:bg-slate-800 dark:text-slate-100"
                       disabled={submitting}
                       required
@@ -283,10 +341,8 @@ export default function SalesForm() {
                       id="unitPrice"
                       type="number"
                       placeholder="0"
-                      // min={0}
-                      // step={0.01}
                       value={unitPrice}
-                      onChange={(e) => setUnitPrice((e.target.value))}
+                      onChange={(e) => setUnitPrice(e.target.value)}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition duration-200 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:shadow-md dark:border-zinc-700 dark:bg-slate-800 dark:text-slate-100"
                       disabled={submitting}
                       required
@@ -335,4 +391,3 @@ export default function SalesForm() {
     </div>
   );
 }
-

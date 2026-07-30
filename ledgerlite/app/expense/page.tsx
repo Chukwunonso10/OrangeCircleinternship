@@ -1,4 +1,4 @@
-import ExpenseClient from "@/components/expenseClient";
+import ExpenseClient from "@/components/expenses/expenseClient";
 import { getMetrics } from "../lib/metrics";
 import { getCurrentUserId } from "../lib/authhelper";
 import prisma from "../lib/prisma";

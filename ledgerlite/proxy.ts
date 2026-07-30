@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function proxy(req: NextRequest) {
     const pathname = req.nextUrl.pathname
-    const isAuthRoute = pathname === "/signin" || pathname === "/signup";
+    const isAuthRoute = pathname === "/signin" || pathname === "/signup" || pathname === "/";
     const sessionToken = req.cookies.get("sessionToken")?.value
 
 
