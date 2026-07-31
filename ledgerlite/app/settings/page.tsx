@@ -87,7 +87,7 @@ export default async function Settings() {
                     <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
                       Email Address
                     </label>
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-all md:break-normal">
                       {email}
                     </p>
                   </div>
