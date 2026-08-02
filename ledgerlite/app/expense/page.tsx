@@ -6,16 +6,16 @@ import { redirect } from "next/navigation";
 
 export default async function Expense() {
   const userId = await getCurrentUserId()
-  if(!userId) {
+  if (!userId) {
     redirect("/signin")
   }
 
   const metrics = await getMetrics()
-  if(!metrics) {
+  if (!metrics) {
     return null
   }
-  const { moneyOutToday, totalMoneyOut , moneyOutYesterday, } = metrics
-  
+  const { moneyOutToday, totalMoneyOut, moneyOutYesterday, } = metrics
+
   const allExpenses = await prisma.expense.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" }
@@ -29,6 +29,6 @@ export default async function Expense() {
   }))
 
   return (
-    <ExpenseClient  moneyOutToday={moneyOutToday} totalMoneyOut={totalMoneyOut} moneyOutYesterday={moneyOutYesterday} expenses={serializedExpenses}/>
+    <ExpenseClient moneyOutToday={moneyOutToday} totalMoneyOut={totalMoneyOut} moneyOutYesterday={moneyOutYesterday} expenses={serializedExpenses} />
   );
 }

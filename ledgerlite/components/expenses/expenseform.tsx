@@ -3,6 +3,7 @@
 import { useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, Plus, Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface ExpenseFormProps {
   onAddOptimistic: (newExpense: any) => void;
@@ -75,6 +76,7 @@ export default function ExpenseForm({ onAddOptimistic }: ExpenseFormProps) {
         }
 
         router.refresh();
+        toast.success("expenses successfully recorded")
       } catch (err: any) {
         console.error("Save expense error:", err);
         setOpen(true);
@@ -82,6 +84,7 @@ export default function ExpenseForm({ onAddOptimistic }: ExpenseFormProps) {
         setCategory(cachedCategory);
         setAmount(cachedAmount);
         setErrorMsg(err.message || "Something went wrong.");
+        toast.success("err.message")
       } finally {
         setSubmitting(false);
       }
