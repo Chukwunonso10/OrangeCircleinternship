@@ -15,7 +15,7 @@ export default function Settings() {
         </div>
         <main className="ml-10 md:ml-72 sm:ml-10  p-6">
           <div className="">
-           <LedgerLiteSettings />
+            <LedgerLiteSettings />
           </div>
         </main>
       </div>
