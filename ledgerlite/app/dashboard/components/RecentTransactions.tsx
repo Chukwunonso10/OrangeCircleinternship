@@ -49,5 +49,5 @@ export default async function RecentTransactions({ userId }: RecentTransactionsP
     .slice(0, 5)
     .map(({ rawDate, ...rest }) => rest);
 
-  return <DashboardCard dashboard={recentTransactions} />;
+  return <DashboardCard dashboard={recentTransactions}/>;
 }

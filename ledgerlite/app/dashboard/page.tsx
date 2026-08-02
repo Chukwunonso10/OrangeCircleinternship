@@ -10,6 +10,7 @@ import DashboardMetrics from "./components/DashboardMetrics";
 import LowStockAlerts from "./components/LowStockAlerts";
 import RecentTransactions from "./components/RecentTransactions";
 import { MetricsSkeleton, LowStockSkeleton, TransactionsSkeleton } from "./components/Skeletons";
+import BarChart from "@/components/barchart";
 
 export default async function Dashboard() {
   const userId = await getCurrentUserId();
@@ -107,11 +108,12 @@ export default async function Dashboard() {
               <LowStockAlerts />
             </Suspense>
           </div>
+          <BarChart />
         </section>
 
         {/* Transaction history - Streamed with Suspense */}
         <section>
-          <div className="my-5">
+          <div className="my-5 mt-10">
             <h2 className="text-lg font-semibold text-slate-800 mb-3">Recent Transactions</h2>
             <Suspense fallback={<TransactionsSkeleton />}>
               <RecentTransactions userId={userId} />
